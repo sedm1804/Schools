@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>England Schools: Attainment 8</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root {
+      --bg: #0b1b2b;
+      --panel: rgba(14, 24, 38, 0.9);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #e7eef7;
+      --muted: #a9b6c7;
+      --accent: #f2d06b;
+    }
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--text); font-family: "Trebuchet MS", Arial, sans-serif; }
+    #map { height: 100vh; width: 100vw; }
+    .panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 500;
+      background: linear-gradient(180deg, rgba(17, 30, 46, 0.98), rgba(10, 18, 30, 0.92));
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(8px);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 14px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+      font-size: 13px;
+      line-height: 1.3;
+      max-width: 320px;
+    }
+    .legend-panel {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 500;
+      background: linear-gradient(180deg, rgba(17, 30, 46, 0.98), rgba(10, 18, 30, 0.92));
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(8px);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+      font-size: 12px;
+      line-height: 1.3;
+      max-width: 220px;
+    }
+    .panel small { color: var(--muted); }
+    .panel h1 {
+      margin: 0 0 4px 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .panel .sub {
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .controls {
+      margin-top: 8px;
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 8px 10px;
+      border-radius: 10px;
+    }
+    .range-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .types {
+      margin-top: 8px;
+      display: grid;
+      gap: 4px;
+      max-height: 140px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .type-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 4px 6px;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+    }
+    .type-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .legend {
+      margin-top: 6px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
+      align-items: center;
+    }
+    .swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.3);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="panel">
+    <h1>England Schools: Attainment 8</h1>
+    <div class="sub">Circle color represents Attainment 8 score (5 bands).</div>
+    <div class="controls">
+      <label for="scoreRange">Filter: Attainment 8 ≥ <span id="scoreValue">0</span></label>
+      <div class="range-row">
+        <input id="scoreRange" type="range" min="0" max="100" value="0" step="1" />
+        <span class="chip">0–100</span>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="chip">School type <span id="typeCount"></span></div>
+      <div class="types" id="typeFilters"></div>
+    </div>
+    <div class="controls">
+      <div class="chip">Religious character <span id="relcharCount"></span></div>
+      <div class="types" id="relcharFilters"></div>
+    </div>
+    <div class="controls">
+      <div class="chip">Gender <span id="genderCount"></span></div>
+      <div class="types" id="genderFilters"></div>
+    </div>
+  </div>
+  <div class="legend-panel">
+    <strong>Attainment 8 Key</strong>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    const ukBounds = L.latLngBounds(
+      L.latLng(49.8, -7.9),
+      L.latLng(61.1, 1.9)
+    );
+
+    const map = L.map('map', {
+      maxBounds: ukBounds,
+      maxBoundsViscosity: 0.85,
+      minZoom: 5,
+      maxZoom: 19
+    }).setView([52.7, -1.4], 6);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    }).addTo(map);
+
+    function colorForScore(score) {
+      if (score <= 40) return '#d32f2f';
+      if (score <= 50) return '#7b1fa2';
+      if (score <= 60) return '#fbc02d';
+      if (score <= 70) return '#2e7d32';
+      return '#1565c0';
+    }
+
+    fetch('schools_att8.json')
+      .then(r => r.json())
+      .then(data => {
+        const points = data
+          .map(d => ({
+            ...d,
+            type: (d.school_type || d.type || d.minor_group || 'Unknown'),
+            relchar: (d.relchar_group || d.relchar || 'None'),
+            gender: (d.gender || 'Unknown'),
+          }))
+          .filter(d => d.lat !== null && d.lon !== null && d.att8 !== null);
+        const scores = points.map(d => d.att8);
+        const min = Math.min(...scores);
+        const max = Math.max(...scores);
+        const layer = L.layerGroup().addTo(map);
+        const markers = [];
+        const types = new Set();
+        const relchars = new Set();
+        const genders = new Set();
+        const typeCounts = new Map();
+        const relcharCounts = new Map();
+        const genderCounts = new Map();
+
+        for (const d of points) {
+          const color = colorForScore(d.att8);
+          const marker = L.circleMarker([d.lat, d.lon], {
+            radius: 6,
+            color,
+            weight: 1,
+            fillColor: color,
+            fillOpacity: 0.65
+          }).bindTooltip(
+            `<strong>${d.name}</strong><br/>Postcode: ${d.postcode}<br/>Type: ${d.type}<br/>Religious character: ${d.relchar}<br/>Gender: ${d.gender}<br/>Attainment 8: ${d.att8}`,
+            { direction: 'top', sticky: true, opacity: 0.95 }
+          );
+          markers.push({ score: d.att8, type: d.type, relchar: d.relchar, gender: d.gender, marker });
+          types.add(d.type);
+          relchars.add(d.relchar);
+          genders.add(d.gender);
+        }
+
+        function normalizeTypeLabel(t) {
+          const key = t.toLowerCase();
+          if (key.includes('academy') || key.includes('college') || key.includes('maintained')) {
+            return 'General';
+          }
+          return t || 'Unknown';
+        }
+
+        function normalizeRelcharLabel(t) {
+          return (t === 'Other Christian' || t === 'None') ? 'CoE/None' : t;
+        }
+
+        function normalizeGenderLabel(t) {
+          return (t === 'Mixed' || t === 'Unknown') ? 'Mixed/Unknown' : t;
+        }
+
+        const typeFilters = document.getElementById('typeFilters');
+        const typeStates = new Map();
+        const typeList = Array.from(types)
+          .map(normalizeTypeLabel)
+          .sort((a, b) => a.localeCompare(b));
+        for (const t of Array.from(new Set(typeList))) {
+          typeCounts.set(t, 0);
+        }
+        for (const item of markers) {
+          const label = normalizeTypeLabel(item.type);
+          typeCounts.set(label, (typeCounts.get(label) || 0) + 1);
+        }
+        const typeCountEl = document.getElementById('typeCount');
+        typeCountEl.textContent = `(${points.length})`;
+        const typeLabelEls = new Map();
+        for (const t of Array.from(new Set(typeList))) {
+          const id = `type_${t.replace(/[^a-z0-9]+/gi, '_')}`;
+          const label = document.createElement('label');
+          label.className = 'type-item';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = id;
+          input.checked = true;
+          const span = document.createElement('span');
+          span.textContent = `${t} (${typeCounts.get(t) || 0})`;
+          typeLabelEls.set(t, span);
+          label.appendChild(input);
+          label.appendChild(span);
+          typeFilters.appendChild(label);
+          typeStates.set(t, true);
+          input.addEventListener('change', () => {
+            typeStates.set(t, input.checked);
+            applyFilter(Number(scoreRange.value));
+          });
+        }
+
+        const relcharFilters = document.getElementById('relcharFilters');
+        const relcharStates = new Map();
+        const relcharList = Array.from(relchars)
+          .map(normalizeRelcharLabel)
+          .sort((a, b) => a.localeCompare(b));
+        for (const t of Array.from(new Set(relcharList))) {
+          relcharCounts.set(t, 0);
+        }
+        for (const item of markers) {
+          const label = normalizeRelcharLabel(item.relchar);
+          relcharCounts.set(label, (relcharCounts.get(label) || 0) + 1);
+        }
+        const relcharCountEl = document.getElementById('relcharCount');
+        relcharCountEl.textContent = `(${points.length})`;
+        const relcharLabelEls = new Map();
+        for (const t of Array.from(new Set(relcharList))) {
+          const id = `relchar_${t.replace(/[^a-z0-9]+/gi, '_')}`;
+          const label = document.createElement('label');
+          label.className = 'type-item';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = id;
+          input.checked = true;
+          const span = document.createElement('span');
+          span.textContent = `${t} (${relcharCounts.get(t) || 0})`;
+          relcharLabelEls.set(t, span);
+          label.appendChild(input);
+          label.appendChild(span);
+          relcharFilters.appendChild(label);
+          relcharStates.set(t, true);
+          input.addEventListener('change', () => {
+            relcharStates.set(t, input.checked);
+            applyFilter(Number(scoreRange.value));
+          });
+        }
+
+        const genderFilters = document.getElementById('genderFilters');
+        const genderStates = new Map();
+        const genderList = Array.from(genders)
+          .map(normalizeGenderLabel)
+          .sort((a, b) => a.localeCompare(b));
+        for (const t of Array.from(new Set(genderList))) {
+          genderCounts.set(t, 0);
+        }
+        for (const item of markers) {
+          const label = normalizeGenderLabel(item.gender);
+          genderCounts.set(label, (genderCounts.get(label) || 0) + 1);
+        }
+        const genderCountEl = document.getElementById('genderCount');
+        genderCountEl.textContent = `(${points.length})`;
+        const genderLabelEls = new Map();
+        for (const t of Array.from(new Set(genderList))) {
+          const id = `gender_${t.replace(/[^a-z0-9]+/gi, '_')}`;
+          const label = document.createElement('label');
+          label.className = 'type-item';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = id;
+          input.checked = true;
+          const span = document.createElement('span');
+          span.textContent = `${t} (${genderCounts.get(t) || 0})`;
+          genderLabelEls.set(t, span);
+          label.appendChild(input);
+          label.appendChild(span);
+          genderFilters.appendChild(label);
+          genderStates.set(t, true);
+          input.addEventListener('change', () => {
+            genderStates.set(t, input.checked);
+            applyFilter(Number(scoreRange.value));
+          });
+        }
+
+        const legend = document.getElementById('legend');
+        const bands = [
+          { label: '0-40', color: '#d32f2f', min: 0, max: 40 },
+          { label: '41-50', color: '#7b1fa2', min: 41, max: 50 },
+          { label: '51-60', color: '#fbc02d', min: 51, max: 60 },
+          { label: '61-70', color: '#2e7d32', min: 61, max: 70 },
+          { label: '71-100', color: '#1565c0', min: 71, max: 100 }
+        ];
+        const bandLabelEls = [];
+        for (const b of bands) {
+          const sw = document.createElement('div');
+          sw.className = 'swatch';
+          sw.style.background = b.color;
+          const label = document.createElement('div');
+          label.textContent = b.label;
+          legend.appendChild(sw);
+          legend.appendChild(label);
+          bandLabelEls.push(label);
+        }
+
+        function applyFilter(minScore) {
+          layer.clearLayers();
+          let visible = 0;
+          const typeVisible = new Map();
+          const relVisible = new Map();
+          const genderVisible = new Map();
+          for (const item of markers) {
+            const typeLabel = normalizeTypeLabel(item.type);
+            const relLabel = normalizeRelcharLabel(item.relchar);
+            const genderLabel = normalizeGenderLabel(item.gender);
+            if (
+              item.score >= minScore &&
+              typeStates.get(typeLabel) !== false &&
+              relcharStates.get(relLabel) !== false &&
+              genderStates.get(genderLabel) !== false
+            ) {
+              layer.addLayer(item.marker);
+              visible += 1;
+              typeVisible.set(typeLabel, (typeVisible.get(typeLabel) || 0) + 1);
+              relVisible.set(relLabel, (relVisible.get(relLabel) || 0) + 1);
+              genderVisible.set(genderLabel, (genderVisible.get(genderLabel) || 0) + 1);
+            }
+          }
+          typeCountEl.textContent = `(${visible})`;
+          relcharCountEl.textContent = `(${visible})`;
+          genderCountEl.textContent = `(${visible})`;
+          for (const [label, el] of typeLabelEls) {
+            el.textContent = `${label} (${typeVisible.get(label) || 0})`;
+          }
+          for (const [label, el] of relcharLabelEls) {
+            el.textContent = `${label} (${relVisible.get(label) || 0})`;
+          }
+          for (const [label, el] of genderLabelEls) {
+            el.textContent = `${label} (${genderVisible.get(label) || 0})`;
+          }
+          const bandCounts = bands.map(() => 0);
+          for (const item of markers) {
+            const typeLabel = normalizeTypeLabel(item.type);
+            const relLabel = normalizeRelcharLabel(item.relchar);
+            const genderLabel = normalizeGenderLabel(item.gender);
+            if (
+              item.score >= minScore &&
+              typeStates.get(typeLabel) !== false &&
+              relcharStates.get(relLabel) !== false &&
+              genderStates.get(genderLabel) !== false
+            ) {
+              for (let i = 0; i < bands.length; i++) {
+                if (item.score >= bands[i].min && item.score <= bands[i].max) {
+                  bandCounts[i] += 1;
+                  break;
+                }
+              }
+            }
+          }
+          for (let i = 0; i < bands.length; i++) {
+            bandLabelEls[i].textContent = `${bands[i].label} (${bandCounts[i]})`;
+          }
+        }
+
+        function updateMarkerSizes() {
+          const zoom = map.getZoom();
+          const radius = Math.max(3, Math.min(28, 2 + zoom * 2.0));
+          for (const item of markers) {
+            item.marker.setStyle({ radius });
+          }
+        }
+
+        const scoreRange = document.getElementById('scoreRange');
+        const scoreValue = document.getElementById('scoreValue');
+        scoreRange.addEventListener('input', () => {
+          const minScore = Number(scoreRange.value);
+          scoreValue.textContent = minScore.toFixed(0);
+          applyFilter(minScore);
+        });
+        applyFilter(Number(scoreRange.value));
+        updateMarkerSizes();
+        map.on('zoomend', updateMarkerSizes);
+
+              })
+      .catch(err => console.error(err));
+  </script>
+</body>
+</html>

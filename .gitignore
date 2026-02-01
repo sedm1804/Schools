@@ -1,0 +1,5 @@
+*
+!.gitignore
+!public/
+!public/index.html
+!public/schools_att8.json
